@@ -1,0 +1,51 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- "*"
+
+stages:
+  - stage: test
+    jobs:
+      - job: 'validateandtest'
+        pool:
+          vmimage: windows-latest
+        steps:
+        - task: AzureResourceManagerTemplateDeployment@3
+          inputs:
+            deploymentScope: 'Resource Group'
+            azureResourceManagerConnection: 'updatedTestARMPipelinee-conn'
+            subscriptionId: 'a00f858f-883b-41bf-b5d7-ae5364a1f03e'
+            action: 'Create Or Update Resource Group'
+            resourceGroupName: 'myResourceGroupDev'
+            location: 'West Europe'
+            templateLocation: 'Linked artifact'
+            csmFile: '$(Build.SourcesDirectory)/StorageAccount/azuredeploy.json'
+            csmParametersFile: '$(Build.SourcesDirectory)/StorageAccount/azuredeploy.parameters.json'
+            deploymentMode: 'Validation'
+        - task: AzurePowerShell@5
+          inputs:
+            azureSubscription: 'updatedTestARMPipelinee-conn'
+            ScriptType: 'InlineScript'
+            Inline: |
+              Install-Module Az.Resources -RequiredVersion 1.12.1-preview -AllowPrerelease -Force -Scope CurrentUser
+              $Parameters = @{
+                ResourcegroupName     = "myResourceGroupDev"
+                Templatefile          = ".\StorageAccount\azuredeploy.json"
+                TemplateParameterfile = ".\StorageAccount\azuredeploy.parameters.json"
+                Mode                  = 'Incremental'
+               }
+              $Result = Get-AzResourceGroupDeploymentWhatIfResult @Parameters
+              $Result
+            azurePowerShellVersion: 'LatestVersion'
+        - task: AzurePowerShell@5
+          displayName: "Check for deletion"
+          inputs:
+            azureSubscription: 'updatedTestARMPipelinee-conn'
+            ScriptType: 'FilePath'
+            ScriptPath: '$(Build.SourcesDirectory)/Tests/CheckForDeletion.ps1'
+            ScriptArguments: '-ResourceGroup myResourceGroupDev'
+            FailOnStandardError: true
+            azurePowerShellVersion: 'LatestVersion'
